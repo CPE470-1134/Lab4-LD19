@@ -1,7 +1,7 @@
 import struct
 import serial
 
-import plotter
+from plotters import PolarPlotter, CartesianPlotter
 
 
 CRC_TABLE =[
@@ -112,7 +112,8 @@ def main():
     # Read Serial Data from the USB with pyserial
     # on /dev/tStyUSB0
 
-    plot_manager = plotter.Plotter()
+    polar_plot_manager = PolarPlotter()
+    cartesian_plot_manager = CartesianPlotter()
     rotation_points = []
     last_angle = 0
     scan_count = 0
@@ -152,8 +153,10 @@ def main():
 
                     # Check if a new rotation has started and we have enough points for a full scan
                     if new_frame.start_angle < last_angle and len(rotation_points) > 3000:
-                        plot_manager.update(rotation_points)
-                        plot_manager.save(f"lidar_scan_{scan_count}.png")
+                        polar_plot_manager.update(rotation_points)
+                        cartesian_plot_manager.update(rotation_points)
+                        polar_plot_manager.save(f"./Polar/lidar_scan_polar_{scan_count}.png")
+                        cartesian_plot_manager.save(f"./Cartesian/lidar_scan_cartesian_{scan_count}.png")
                         scan_count += 1
                         rotation_points = []
 
@@ -164,7 +167,8 @@ def main():
                     print("NOT A HEADER:" + b.hex())
         except KeyboardInterrupt:
             print("Stopping...")
-            plot_manager.close()
+            polar_plot_manager.close()
+            cartesian_plot_manager.close()
 
 def is_header(b : bytes):
     # Index First Byte 
