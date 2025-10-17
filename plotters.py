@@ -42,7 +42,8 @@ class PolarPlotter(BasePlotter):
     def _init_plot(self):
 
 
-        self.ax.set_ylim(0, 120000)  # Assuming max distance is 120000 mm
+        self.ax.set_ylim(0, 12000)  # Assuming max distance is 120000 mm
+
         self.ax.set_theta_zero_location('N')
         self.ax.set_theta_direction(-1)
 
@@ -78,9 +79,10 @@ class CartesianPlotter(BasePlotter):
 
     def _init_plot(self):
         
-        # Set limits assuming max distance is 120000 mm
-        self.ax.set_xlim(-120000, 120000)
-        self.ax.set_ylim(-120000, 120000)
+        # Set limits assuming max distance is 12000 mm
+        view = 500
+        self.ax.set_xlim(-view, view)
+        self.ax.set_ylim(-view, view)
         self.ax.set_aspect('equal', adjustable='box')
         self.ax.set_xlabel("X (mm)")
         self.ax.set_ylabel("Y (mm)")
@@ -93,16 +95,15 @@ class CartesianPlotter(BasePlotter):
         # Convert angles to radians
         angles_rad = np.radians([p.angle for p in points])
         distances = np.array([p.distance for p in points])
-        intensities = [p.intensity for p in points]
+        intensities = np.array([p.intensity for p in points])
 
         # Convert polar to cartesian coordinates
-        x = distances * np.sin(angles_rad)
-        y = distances * np.cos(angles_rad)
+        x = distances * np.cos(angles_rad)
+        y = distances * np.sin(angles_rad)
 
         self.scat.set_offsets(np.c_[x, y])
-        self.scat.set_array(np.array(intensities))
+        self.scat.set_array(intensities)
         self.ax.figure.canvas.draw()
         self.ax.figure.canvas.flush_events()
-        plt.pause(0.01)
 
 

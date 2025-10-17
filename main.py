@@ -34,11 +34,10 @@ PORT = "/dev/ttyUSB0"
 BAUD = 230400
 
 class LDPoint:
-
-    def __init__(self,dist,intensity):
+    def __init__(self, dist, intensity, angle):
         self.distance = dist
         self.intensity = intensity
-        self.angle = 0.0 # To be set when parsing a full frame
+        self.angle = angle
         
 
 class LD19Packet:
@@ -53,7 +52,7 @@ class LD19Packet:
 
         # raw bytes of Frame
         self.raw = raw
-        self.valid = self._val()
+        self.valid = self._valcrc()
         self.LDPoints = []
         self.speed = 0
         self.start_angle = 0.0
@@ -62,12 +61,13 @@ class LD19Packet:
         self.crc = 0
 
         self._parse()
+        self._valcrc()
 
     # Validates CRC 
-    def _val(self):
+    def _valcrc(self):
         crc = 0
         for b in self.raw[0:-2]:
-            crc = CRC_TABLE[crc ^ b]
+            crc = CRC_TABLE[crc ^ b] & 0xff
 
         # Extract CRC from the last two bytes of the raw frame
         frame_crc = self.raw[-2]
@@ -78,24 +78,29 @@ class LD19Packet:
         self.header = self.raw[0]
         self.ver_len = self.raw[1]
 
-        self.speed = struct.unpack_from("<H",self.raw,2)[0]
-        self.start_angle = struct.unpack_from("<H",self.raw,4)[0] / 100.0
+        self.speed = struct.unpack_from("<H", self.raw, 2)[0]
+        self.start_angle = struct.unpack_from("<H", self.raw, 4)[0] / 100.0
+        self.end_angle = struct.unpack_from("<H", self.raw, 42)[0] / 100.0
 
+        angle_diff = self.end_angle - self.start_angle
+
+        point_count = 0
         offset = 6 # speed + start_angle offset
         for _ in range(self.POINT_PER_PACK):
             #Unpack A Point (distance, intensity)
             # unpack 2 bytes dist, 1 byte intensity
             dist = struct.unpack_from("<H",self.raw,offset)[0]
             intensity = self.raw[offset + 2]
+            
+            t = point_count / (12-1)
+            angle = self.start_angle + angle_diff * t
 
             # Create and append new Point
-            new_pt = LDPoint(dist=dist,intensity=intensity)
+            new_pt = LDPoint(dist, intensity, angle)
             self.LDPoints.append(new_pt)
             offset += 3
+            point_count += 1
 
-        self.end_angle = struct.unpack_from("<H", self.raw,offset)[0] / 100.0
-
-        angle_diff = self.end_angle - self.start_angle
         if angle_diff < 0:
             angle_diff += 360.0
 
@@ -106,13 +111,14 @@ class LD19Packet:
         offset += 2
 
         self.crc = struct.unpack_from("<H",self.raw,offset)[0]
+        
 def main():
     print("Hello from lab4!")
 
     # Read Serial Data from the USB with pyserial
     # on /dev/tStyUSB0
 
-    polar_plot_manager = PolarPlotter()
+    #polar_plot_manager = PolarPlotter()
     cartesian_plot_manager = CartesianPlotter()
     rotation_points = []
     last_angle = 0
@@ -128,7 +134,7 @@ def main():
                 b = ser.read()
                 if is_header(b):
                     #Parse
-                    print("Start of Frame Detected!")
+                    #print("Start of Frame Detected!")
                     
                     # Read FRAME_SIZE - 1 Bytes (Rest of Frame Besides Header )
                     frame_data = bytes([b[0]]) + ser.read(LD19Packet.FRAME_SIZE - 1)
@@ -140,7 +146,7 @@ def main():
                         #print("INVALID Frame Received!")
                         #print("Frame Data (Hex): " + frame_data.hex())
                         #continue
-
+                    
                     print("Frame Data (Hex): " + frame_data.hex())
                     print("Speed (RPM): " + str(new_frame.speed / 64.0))
                     print("Start Angle (Degrees): " + str(new_frame.start_angle))
@@ -150,24 +156,27 @@ def main():
                     for i,pt in enumerate(new_frame.LDPoints):
                         print(f"Point {i}: Distance (mm): {pt.distance}, Intensity: {pt.intensity}")
                     print("")
-
+                    
                     # Check if a new rotation has started and we have enough points for a full scan
-                    if new_frame.start_angle < last_angle and len(rotation_points) > 3000:
-                        polar_plot_manager.update(rotation_points)
-                        cartesian_plot_manager.update(rotation_points)
-                        polar_plot_manager.save(f"./Polar/lidar_scan_polar_{scan_count}.png")
-                        cartesian_plot_manager.save(f"./Cartesian/lidar_scan_cartesian_{scan_count}.png")
+                    if new_frame.start_angle < last_angle:
                         scan_count += 1
+                    
+                    print(scan_count)
+                    if scan_count >= 100:
+                        #polar_plot_manager.update(rotation_points)
+                        cartesian_plot_manager.update(rotation_points)
+                        #polar_plot_manager.save(f"./Polar/lidar_scan_polar_{scan_count}.png")
+                        cartesian_plot_manager.save(f"./Cartesian/lidar_scan_cartesian.png")
+                        
+                        scan_count = 0
                         rotation_points = []
 
                     rotation_points.extend(new_frame.LDPoints)
                     last_angle = new_frame.start_angle
 
-                else:
-                    print("NOT A HEADER:" + b.hex())
         except KeyboardInterrupt:
             print("Stopping...")
-            polar_plot_manager.close()
+            #polar_plot_manager.close()
             cartesian_plot_manager.close()
 
 def is_header(b : bytes):
