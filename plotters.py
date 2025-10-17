@@ -80,10 +80,11 @@ class CartesianPlotter(BasePlotter):
     def _init_plot(self):
         
         # Set limits assuming max distance is 12000 mm
-        view = 500
+        view = 5000  # 1000 mm = 1 m
         self.ax.set_xlim(-view, view)
         self.ax.set_ylim(-view, view)
         self.ax.set_aspect('equal', adjustable='box')
+        self.ax.autoscale()     # fits axes to data
         self.ax.set_xlabel("X (mm)")
         self.ax.set_ylabel("Y (mm)")
         self.ax.set_title("Lidar Scan (Cartesian)")
